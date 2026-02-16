@@ -1,44 +1,80 @@
 <?php
-  require "db_connection.php";
+session_start();
+require "db_connection.php";
 
-  if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    // Get form data
-    $name = $_POST['name'];
-    $email = $_POST['email'];
+$error = ""; // ADD THIS
+
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+
+    $name = trim($_POST['name']);
+    $email = trim($_POST['email']);
     $password = $_POST['password'];
-    $stmt = $con->prepare("INSERT INTO users (name, email, password) 	VALUES (?, ?, ?)");
-    $stmt->bind_param("sss", $name, $email, $password);
-    
-    if ($stmt->execute()) {
-      echo "
-      <script>
-        alert('New user added successfully! Please Log In');
-        document.location = 'login.php';
-      </script>";
-    } else {
-      echo "Error: " . $stmt->error;
-    }
-    $stmt->close();
-  }
-?>
 
+    // Validate email
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $error = "Invalid email format";
+    }
+
+    // Password length check
+    elseif (strlen($password) < 8) {
+        $error = "Password must be at least 8 characters";
+    }
+
+    else {
+        // Check duplicate email
+        $check = $con->prepare("SELECT id FROM users WHERE email=?");
+        $check->bind_param("s", $email);
+        $check->execute();
+        $check->store_result();
+
+        if ($check->num_rows > 0) {
+            $error = "Email already registered";
+        }
+        $check->close();
+    }
+
+    // Insert user ONLY if no error
+    if (empty($error)) {
+
+        $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+
+        $stmt = $con->prepare("INSERT INTO users (name, email, password) VALUES (?, ?, ?)");
+        $stmt->bind_param("sss", $name, $email, $hashed_password);
+
+        if ($stmt->execute()) {
+            echo "<script>
+                    alert('Registration successful! Please login.');
+                    window.location='login.php';
+                  </script>";
+        } else {
+            $error = "Error: " . $stmt->error;
+        }
+
+        $stmt->close();
+    }
+}
+?>
 
 <!DOCTYPE html>
 <html>
 <head>
-  <title>CSCI 4060</title>
-  <link rel="stylesheet" href="custom_style.css">
+    <title>Register</title>
 </head>
 <body>
-  <div id="content_div">
-    <h1>Insert New User</h1>
-    <form method="POST" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>">
-      <input type="text" name="name" placeholder="Enter your name" required><br><br>
-      <input type="email" name="email" placeholder="Enter your email" required><br><br>
-      <input type="password" name="password" placeholder="Enter preferred password" required><br><br>
-      <input type="submit" id="submit_btn" name="register_in_btn" value="Register">
-    </form>
-    <h3>Already a user? <a href='login.php'> Log In Here!</a></h3>
-  </div>
+
+<h2>Register</h2>
+
+<!-- SHOW ERROR HERE -->
+<?php if (!empty($error)) echo "<p style='color:red;'>$error</p>"; ?>
+
+<form method="POST">
+    <input type="text" name="name" placeholder="Name" required><br><br>
+    <input type="email" name="email" placeholder="Email" required><br><br>
+    <input type="password" name="password" placeholder="Password (min 8 chars)" required><br><br>
+    <input type="submit" value="Register">
+</form>
+
+<a href="login.php">Already have an account? Login</a>
+
 </body>
 </html>
